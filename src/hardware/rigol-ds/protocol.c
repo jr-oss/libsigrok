@@ -334,6 +334,7 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 	gchar *trig_mode;
 	unsigned int num_channels, i, j;
 	int buffer_samples;
+	int buffer_samples_digital;
 
 	if (!(devc = sdi->priv))
 		return SR_ERR;
@@ -391,7 +392,9 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 			} else if (devc->model->series->protocol >= PROTOCOL_V4) {
 				num_channels = 0;
 
-				/* Channels 3 and 4 are multiplexed with D0-7 and D8-15 */
+				/* Channels 3 and 4 are multiplexed with D0-7 and D8-15.
+				 * MSO5000 has dedicated LA storage, queried below and does
+				 * not use num_channels */
 				for (i = 0; i < devc->model->analog_channels; i++) {
 					if (devc->analog_channels[i]) {
 						num_channels++;
@@ -408,13 +411,24 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 				buffer_samples = devc->model->series->buffer_samples;
 				if (first_frame && buffer_samples == 0)
 				{
-					/* The DS4000 series does not have a fixed memory depth, it
+					/* The DS4000/MSO5000 series does not have a fixed memory depth, it
 					 * can be chosen from the menu and also varies with number
 					 * of active channels. Retrieve the actual number with the
 					 * ACQ:MDEP command. */
-					sr_scpi_get_int(sdi->conn, "ACQ:MDEP?", &buffer_samples);
+					if (sr_scpi_get_int(sdi->conn, "ACQ:MDEP?", &buffer_samples) != SR_OK)
+						return SR_ERR;
+					sr_spew("ACQ:MDEP? buffer_samples=%d", buffer_samples);
 					devc->analog_frame_size = devc->digital_frame_size =
 							buffer_samples;
+
+					if (devc->model->series->protocol == PROTOCOL_V5) {
+						/*
+						 * MSO5000 may have different buffer sizes for analog and digital channels
+						 */
+						sr_scpi_get_int(sdi->conn, "ACQ:LA:MDEP?", &buffer_samples_digital);
+						sr_spew("ACQ:LA:MDEP? buffer_samples_digital=%d", buffer_samples_digital);
+						devc->digital_frame_size = buffer_samples_digital;
+                                       }
 				}
 				else if (first_frame)
 				{
@@ -665,7 +679,7 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 				return TRUE;
 			if (first_frame && rigol_ds_config_set(sdi, ":WAV:STOP %d",
 					MIN(devc->num_channel_bytes + ACQ_BLOCK_SIZE,
-						devc->analog_frame_size)) != SR_OK)
+						expected_data_bytes)) != SR_OK)
 				return TRUE;
 		}
 
