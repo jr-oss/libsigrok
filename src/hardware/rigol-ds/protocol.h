@@ -32,10 +32,10 @@
 #define ACQ_BUFFER_SIZE (32 * 1024)
 
 /* Maximum number of samples to retrieve at once. */
-#define ACQ_BLOCK_SIZE (30 * 1000)
+#define ACQ_BLOCK_SIZE (30 * 1000)	// Max. feasible value for MSO5000 is 4096000
 
 #define MAX_ANALOG_CHANNELS 4
-#define MAX_DIGITAL_CHANNELS 16
+#define MAX_DIGITAL_CHANNELS 16	// Must be multiple of 8
 
 enum protocol_version {
 	PROTOCOL_V1, /* VS5000 */
@@ -156,6 +156,12 @@ struct dev_context {
 	uint64_t num_block_bytes;
 	/* Number of data block bytes already read */
 	uint64_t num_block_read;
+
+	/* start offset within data block for current iteration over all channels */
+	uint64_t block_start_offset_current_iteration;
+	/* Is another iteration required to complete this frame ? */
+	gboolean frame_needs_another_iteration;
+
 	/* What to wait for in *_receive */
 	enum wait_events wait_event;
 	/* Trigger/block copying/stop waiting status */
