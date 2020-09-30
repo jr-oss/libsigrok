@@ -163,6 +163,8 @@ struct dev_context {
 	/* Acq buffers used for reading from the scope and sending data to app */
 	unsigned char *buffer;
 	float *data;
+	unsigned char *data_logic;
+	int last_enabled_digital_channel;
 };
 
 SR_PRIV int rigol_ds_config_set(const struct sr_dev_inst *sdi, const char *format, ...);

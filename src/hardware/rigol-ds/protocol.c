@@ -341,6 +341,9 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 
 	const gboolean first_frame = (devc->num_frames == 0);
 
+	if (first_frame)
+		memset(devc->data_logic, 0, 25000000 * (MAX_DIGITAL_CHANNELS / 8)); // 25M gets replaced later
+
 	uint64_t limit_frames = devc->limit_frames;
 	if (devc->num_frames_segmented != 0 && devc->num_frames_segmented < limit_frames)
 		limit_frames = devc->num_frames_segmented;
@@ -411,7 +414,7 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 				buffer_samples = devc->model->series->buffer_samples;
 				if (first_frame && buffer_samples == 0)
 				{
-					/* The DS4000/MSO5000 series does not have a fixed memory depth, it
+					/* The DS4000/MSO5000 series do not have a fixed memory depth, it
 					 * can be chosen from the menu and also varies with number
 					 * of active channels. Retrieve the actual number with the
 					 * ACQ:MDEP command. */
@@ -425,10 +428,10 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 						/*
 						 * MSO5000 may have different buffer sizes for analog and digital channels
 						 */
-						sr_scpi_get_int(sdi->conn, "ACQ:LA:MDEP?", &buffer_samples_digital);
+						if (sr_scpi_get_int(sdi->conn, "ACQ:LA:MDEP?", &buffer_samples_digital) == SR_OK)
+							devc->digital_frame_size = buffer_samples_digital;
 						sr_spew("ACQ:LA:MDEP? buffer_samples_digital=%d", buffer_samples_digital);
-						devc->digital_frame_size = buffer_samples_digital;
-                                       }
+					}
 				}
 				else if (first_frame)
 				{
@@ -622,7 +625,10 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 	struct sr_analog_spec spec;
 	struct sr_datafeed_logic logic;
 	double vdiv, offset, origin;
-	int len, i, vref;
+	int len, i, j, vref;
+	unsigned int ui;
+	unsigned int cur_sample;
+	int out_index;
 	struct sr_channel *ch;
 	gsize expected_data_bytes;
 
@@ -767,7 +773,7 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		packet.payload = &analog;
 		sr_session_send(sdi, &packet);
 		g_slist_free(analog.meaning->channels);
-	} else {
+	} else if (!devc->data_logic) {
 		logic.length = len;
 		// TODO: For the MSO1000Z series, we need a way to express that
 		// this data is in fact just for a single channel, with the valid
@@ -777,6 +783,55 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		packet.type = SR_DF_LOGIC;
 		packet.payload = &logic;
 		sr_session_send(sdi, &packet);
+	} else {
+		/* merge la data before sending data of all channels in one packet */
+		logic.unitsize = (devc->last_enabled_digital_channel <= 7) ? 1 : 2;
+		sr_spew("Merge channel %d into buffer[%" PRIu64 "], len=%d",
+				ch->index, devc->num_channel_bytes, len);
+		for (i = 0; i < len; i++) {
+			if (ch->index <= 7) {
+				devc->data_logic[logic.unitsize * (i + devc->num_channel_bytes) + 0] |=
+						(devc->buffer[i] & 1) << (ch->index);
+			} else {
+				devc->data_logic[logic.unitsize * (i + devc->num_channel_bytes) + 1] |=
+						(devc->buffer[i] & 1) << (ch->index - 8);
+			}
+		}
+		if (devc->num_channel_bytes + len == expected_data_bytes &&
+				ch->index == devc->last_enabled_digital_channel) {
+			sr_spew("Sending merged la data expanded to analog (%" PRIu64 " -> %" PRIu64 ")",
+					devc->digital_frame_size, devc->analog_frame_size);
+			cur_sample = 0;
+			out_index = 0;
+			for (ui = 0; ui < expected_data_bytes; ui++) {
+				while (cur_sample < devc->analog_frame_size) {
+					for (j = 0; j < logic.unitsize; j++) {
+						devc->buffer[out_index++] = devc->data_logic[logic.unitsize * ui + j];
+					}
+					if (out_index + logic.unitsize >= ACQ_BUFFER_SIZE) {
+						sr_spew("Sending chunk of expanded data len=%d", out_index);
+						logic.length = out_index;
+						logic.data = devc->buffer;
+						packet.type = SR_DF_LOGIC;
+						packet.payload = &logic;
+						sr_session_send(sdi, &packet);
+
+						out_index = 0;
+					}
+					cur_sample += devc->digital_frame_size;
+				}
+				cur_sample -= devc->analog_frame_size;
+			}
+			if (out_index) {
+				sr_spew("Sending last chunk of expanded data len=%d", out_index);
+				logic.length = out_index;
+				logic.data = devc->buffer;
+				packet.type = SR_DF_LOGIC;
+				packet.payload = &logic;
+				sr_session_send(sdi, &packet);
+			}
+			memset(devc->data_logic, 0, 25000000 * (MAX_DIGITAL_CHANNELS / 8)); // 25M gets replaced later
+		}
 	}
 
 	if (devc->num_block_read == devc->num_block_bytes) {
