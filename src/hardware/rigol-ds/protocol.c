@@ -972,6 +972,8 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		std_session_send_df_frame_end(sdi);
 
 		devc->num_frames++;
+		devc->block_start_offset_current_iteration = 0;
+		devc->frame_needs_another_iteration = FALSE;
 
 		/* V5 has no way to read the number of recorded frames, so try to set the
 		 * next frame and read it back instead.
