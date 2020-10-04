@@ -669,8 +669,6 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 	if (!(revents == G_IO_IN || revents == 0))
 		return TRUE;
 
-	const gboolean first_frame = (devc->num_frames == 0);
-
 	switch (devc->wait_event) {
 	case WAIT_NONE:
 		break;
@@ -731,9 +729,9 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		if (devc->model->series->protocol >= PROTOCOL_V4) {
 			offset_start = devc->num_channel_bytes + devc->block_start_offset_current_iteration + 1;
 
-			if (first_frame && rigol_ds_config_set(sdi, ":WAV:START %d",offset_start) != SR_OK)
+			if (rigol_ds_config_set(sdi, ":WAV:START %d",offset_start) != SR_OK)
 				return TRUE;
-			if (first_frame && rigol_ds_config_set(sdi, ":WAV:STOP %d", offset_stop) != SR_OK)
+			if (rigol_ds_config_set(sdi, ":WAV:STOP %d", offset_stop) != SR_OK)
 				return TRUE;
 		}
 
