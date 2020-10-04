@@ -432,6 +432,11 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 						if (sr_scpi_get_int(sdi->conn, "ACQ:LA:MDEP?", &buffer_samples_digital) == SR_OK)
 							devc->digital_frame_size = buffer_samples_digital;
 						sr_spew("ACQ:LA:MDEP? buffer_samples_digital=%d", buffer_samples_digital);
+						struct sr_channel *ch = devc->enabled_channels->data;
+						// Only digital channels, i.e. there is no need to adjust
+						// logic channel sample rate to match analog channel
+						if (ch->type == SR_CHANNEL_LOGIC)
+							devc->analog_frame_size = devc->digital_frame_size;
 					}
 				}
 				else if (first_frame)
@@ -550,6 +555,16 @@ SR_PRIV int rigol_ds_channel_start(const struct sr_dev_inst *sdi)
 			return SR_ERR;
 	} else if (ch->type == SR_CHANNEL_ANALOG) {
 		devc->vert_inc[ch->index] = devc->vdiv[ch->index] / 25.6;
+	}
+
+	if (devc->model->series->protocol >= PROTOCOL_V3 &&
+			devc->sample_rate == 0.0) {
+		float xinc;
+		if (sr_scpi_get_float(sdi->conn, "WAV:XINC?", &xinc) != SR_OK) {
+			sr_err("Couldn't get sampling rate");
+			return SR_ERR;
+		}
+		devc->sample_rate = 1. / xinc;
 	}
 
 	rigol_ds_set_wait_event(devc, WAIT_BLOCK);

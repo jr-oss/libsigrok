@@ -1030,16 +1030,16 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	devc->channel_entry = devc->enabled_channels;
 
 	if (devc->data_source == DATA_SOURCE_LIVE)
-		devc->sample_rate = analog_frame_size(sdi) / 
+		/* sample rate is the same for analog and logic channels */
+		devc->sample_rate = devc->model->series->live_samples /
 			(devc->timebase * devc->model->series->num_horizontal_divs);
 	else {
-		float xinc;
-		if (devc->model->series->protocol >= PROTOCOL_V3 && 
-				sr_scpi_get_float(sdi->conn, "WAV:XINC?", &xinc) != SR_OK) {
-			sr_err("Couldn't get sampling rate");
-			return SR_ERR;
+		if (protocol >= PROTOCOL_V3) {
+			/* You only know the exact sample rate, after capturing data */
+			devc->sample_rate = 0.0;
+		} else {
+			devc->sample_rate = 0.0;	/* How to get sample rate for protocol V1, V2 ? */
 		}
-		devc->sample_rate = 1. / xinc;
 	}
 
 
