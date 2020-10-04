@@ -1018,10 +1018,6 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 		break;
 	}
 
-	if (devc->data_source == DATA_SOURCE_LIVE)
-		if (rigol_ds_config_set(sdi, ":RUN") != SR_OK)
-			return SR_ERR;
-
 	sr_scpi_source_add(sdi->session, scpi, G_IO_IN, 50,
 			rigol_ds_receive, (void *)sdi);
 

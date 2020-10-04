@@ -335,6 +335,7 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 	unsigned int num_channels, i, j;
 	int buffer_samples;
 	int buffer_samples_digital;
+	char *buf;
 
 	if (!(devc = sdi->priv))
 		return SR_ERR;
@@ -384,11 +385,18 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 		if (first_frame && rigol_ds_config_set(sdi, ":WAV:FORM BYTE") != SR_OK)
 			return SR_ERR;
 		if (devc->data_source == DATA_SOURCE_LIVE) {
-			if (first_frame && rigol_ds_config_set(sdi, ":WAV:MODE NORM") != SR_OK)
-				return SR_ERR;
+			if (first_frame) {
+				if (rigol_ds_config_set(sdi, ":WAV:MODE NORM") != SR_OK)
+					return SR_ERR;
+				// If trigger state is stopped, read data first, before re-arming
+				if (sr_scpi_get_string(sdi->conn, ":TRIG:STAT?", &buf) != SR_OK)
+					return SR_ERR;
+				if (buf[0] != 'S' && rigol_ds_config_set(sdi, ":SING") != SR_OK)
+					return SR_ERR;
+			}
 			devc->analog_frame_size = devc->model->series->live_samples;
 			devc->digital_frame_size = devc->model->series->live_samples;
-			rigol_ds_set_wait_event(devc, WAIT_TRIGGER);
+			rigol_ds_set_wait_event(devc, WAIT_STOP);
 		} else {
 			if (devc->model->series->protocol == PROTOCOL_V3) {
 				if (first_frame && rigol_ds_config_set(sdi, ":WAV:MODE RAW") != SR_OK)
@@ -453,9 +461,13 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 				}
 			}
 
-			if (devc->data_source == DATA_SOURCE_LIVE && rigol_ds_config_set(sdi, ":SINGL") != SR_OK)
-				return SR_ERR;
+			if (devc->data_source == DATA_SOURCE_LIVE ||
+					devc->data_source == DATA_SOURCE_MEMORY) {
+				if (rigol_ds_config_set(sdi, ":SING") != SR_OK)
+					return SR_ERR;
+			}
 			rigol_ds_set_wait_event(devc, WAIT_STOP);
+
 			if (devc->data_source == DATA_SOURCE_SEGMENTED &&
 					devc->model->series->protocol <= PROTOCOL_V4)
 				if (rigol_ds_config_set(sdi, "FUNC:WREP:FCUR %d", devc->num_frames + 1) != SR_OK)
@@ -975,13 +987,18 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		}
 
 		if (devc->num_frames == devc->limit_frames ||
-				devc->num_frames == devc->num_frames_segmented ||
-				devc->data_source == DATA_SOURCE_MEMORY) {
+				devc->num_frames == devc->num_frames_segmented) {
 			/* Last frame, stop capture. */
 			sr_dev_acquisition_stop(sdi);
 		} else {
 			/* Get the next frame, starting with the first channel. */
 			devc->channel_entry = devc->enabled_channels;
+
+			if (devc->model->series->protocol == PROTOCOL_V5 &&
+					(devc->data_source == DATA_SOURCE_LIVE ||
+					devc->data_source == DATA_SOURCE_MEMORY ) &&
+					rigol_ds_config_set(sdi, ":SING") != SR_OK)
+				return SR_ERR;
 
 			rigol_ds_capture_start(sdi);
 
