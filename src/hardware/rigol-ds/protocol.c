@@ -565,6 +565,8 @@ SR_PRIV int rigol_ds_channel_start(const struct sr_dev_inst *sdi)
 			return SR_ERR;
 		}
 		devc->sample_rate = 1. / xinc;
+		sr_session_send_meta(sdi, SR_CONF_SAMPLERATE,
+				g_variant_new_uint64(devc->sample_rate));
 	}
 
 	rigol_ds_set_wait_event(devc, WAIT_BLOCK);
