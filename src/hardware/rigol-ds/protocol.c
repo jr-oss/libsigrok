@@ -946,6 +946,12 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 	} else if (devc->frame_needs_another_iteration) {
 		/* Done with this iteration, but we need more iterations to complete frame */
 		devc->channel_entry = devc->enabled_channels;
+		while (devc->channel_entry->next) {
+			ch = devc->channel_entry->data;
+			if (ch->type != SR_CHANNEL_ANALOG)
+				break;
+			devc->channel_entry = devc->channel_entry->next;
+		}
 		devc->block_start_offset_current_iteration += ACQ_BLOCK_SIZE;
 		devc->frame_needs_another_iteration = FALSE;
 		rigol_ds_channel_start(sdi);
