@@ -981,9 +981,9 @@ SR_PRIV int rigol_ds_receive(int fd, int revents, void *cb_data)
 		if (devc->data_source == DATA_SOURCE_SEGMENTED &&
 				devc->model->series->protocol == PROTOCOL_V5) {
 			int frames = 0;
-			if (rigol_ds_config_set(sdi, "REC:CURR %d", devc->num_frames + 1) != SR_OK)
+			if (rigol_ds_config_set(sdi, ":REC:CURR %d", devc->num_frames + 1) != SR_OK)
 				return SR_ERR;
-			if (sr_scpi_get_int(sdi->conn, "REC:CURR?", &frames) != SR_OK)
+			if (sr_scpi_get_int(sdi->conn, ":REC:CURR?", &frames) != SR_OK)
 				return SR_ERR;
 			devc->num_frames_segmented = frames;
 		}
