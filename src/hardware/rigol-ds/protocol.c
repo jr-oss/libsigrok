@@ -334,7 +334,6 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 	gchar *trig_mode;
 	unsigned int num_channels, i, j;
 	int buffer_samples;
-	int buffer_samples_digital;
 	char *buf;
 
 	if (!(devc = sdi->priv))
@@ -401,12 +400,10 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 			if (devc->model->series->protocol == PROTOCOL_V3) {
 				if (first_frame && rigol_ds_config_set(sdi, ":WAV:MODE RAW") != SR_OK)
 					return SR_ERR;
-			} else if (devc->model->series->protocol >= PROTOCOL_V4) {
+			} else if (devc->model->series->protocol == PROTOCOL_V4) {
 				num_channels = 0;
 
-				/* Channels 3 and 4 are multiplexed with D0-7 and D8-15.
-				 * MSO5000 has dedicated LA storage, queried below and does
-				 * not use num_channels */
+				/* Channels 3 and 4 are multiplexed with D0-7 and D8-15. */
 				for (i = 0; i < devc->model->analog_channels; i++) {
 					if (devc->analog_channels[i]) {
 						num_channels++;
@@ -423,29 +420,14 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 				buffer_samples = devc->model->series->buffer_samples;
 				if (first_frame && buffer_samples == 0)
 				{
-					/* The DS4000/MSO5000 series do not have a fixed memory depth, it
+					/* The DS4000 series does not have a fixed memory depth, it
 					 * can be chosen from the menu and also varies with number
 					 * of active channels. Retrieve the actual number with the
 					 * ACQ:MDEP command. */
 					if (sr_scpi_get_int(sdi->conn, "ACQ:MDEP?", &buffer_samples) != SR_OK)
 						return SR_ERR;
-					sr_spew("ACQ:MDEP? buffer_samples=%d", buffer_samples);
 					devc->analog_frame_size = devc->digital_frame_size =
 							buffer_samples;
-
-					if (devc->model->series->protocol == PROTOCOL_V5) {
-						/*
-						 * MSO5000 may have different buffer sizes for analog and digital channels
-						 */
-						if (sr_scpi_get_int(sdi->conn, "ACQ:LA:MDEP?", &buffer_samples_digital) == SR_OK)
-							devc->digital_frame_size = buffer_samples_digital;
-						sr_spew("ACQ:LA:MDEP? buffer_samples_digital=%d", buffer_samples_digital);
-						struct sr_channel *ch = devc->enabled_channels->data;
-						// Only digital channels, i.e. there is no need to adjust
-						// logic channel sample rate to match analog channel
-						if (ch->type == SR_CHANNEL_LOGIC)
-							devc->analog_frame_size = devc->digital_frame_size;
-					}
 				}
 				else if (first_frame)
 				{
@@ -492,6 +474,8 @@ SR_PRIV int rigol_ds_channel_start(const struct sr_dev_inst *sdi)
 {
 	struct dev_context *devc;
 	struct sr_channel *ch;
+	int buffer_samples;
+	int buffer_samples_digital;
 
 	if (!(devc = sdi->priv))
 		return SR_ERR;
@@ -585,8 +569,27 @@ SR_PRIV int rigol_ds_channel_start(const struct sr_dev_inst *sdi)
 			return SR_ERR;
 		}
 		devc->sample_rate = 1. / xinc;
-		sr_session_send_meta(sdi, SR_CONF_SAMPLERATE,
-				g_variant_new_uint64(devc->sample_rate));
+	}
+	if (initial_start && devc->model->series->protocol == PROTOCOL_V5)
+	{
+		/* The MSO5000 series do not have a fixed memory depth, it
+		 * can be chosen from the menu and also varies with number
+		 * of active channels. Values are only reliable after acquiring data.
+		 * Retrieve the actual number with the ACQ:MDEP and ACQ:LA:MDEP commands. */
+		if (sr_scpi_get_int(sdi->conn, ":ACQ:MDEP?", &buffer_samples) != SR_OK)
+			return SR_ERR;
+		sr_spew("ACQ:MDEP? buffer_samples=%d", buffer_samples);
+		devc->analog_frame_size = devc->digital_frame_size =
+				buffer_samples;
+
+		if (sr_scpi_get_int(sdi->conn, ":ACQ:LA:MDEP?", &buffer_samples_digital) == SR_OK)
+			devc->digital_frame_size = buffer_samples_digital;
+		sr_spew("ACQ:LA:MDEP? buffer_samples_digital=%d", buffer_samples_digital);
+		ch = devc->enabled_channels->data;
+		// Only digital channels, i.e. there is no need to adjust
+		// logic channel sample rate to match analog channel
+		if (ch->type == SR_CHANNEL_LOGIC)
+			devc->analog_frame_size = devc->digital_frame_size;
 	}
 
 	rigol_ds_set_wait_event(devc, WAIT_BLOCK);
