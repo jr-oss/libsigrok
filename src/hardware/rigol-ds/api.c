@@ -787,6 +787,8 @@ static int config_set(uint32_t key, GVariant *data,
 			sr_err("Unknown data source: '%s'.", tmp_str);
 			return SR_ERR;
 		}
+		if (devc->model->series->protocol == PROTOCOL_V5)
+			devc->sample_rate = 0.0; // sample rate changes with data source
 		break;
 	default:
 		return SR_ERR_NA;
@@ -1061,6 +1063,13 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 	devc->enabled_channels = NULL;
 	scpi = sdi->conn;
 	sr_scpi_source_remove(sdi->session, scpi);
+
+	if (devc->model->series->protocol == PROTOCOL_V5) {
+		// For MSO5000 the sample rate may change between sessions,
+		// when changing data source, en-/disabling of analog channels or
+		// switching from mixed mode to digital only
+		devc->sample_rate = 0.0;
+	}
 
 	return SR_OK;
 }
