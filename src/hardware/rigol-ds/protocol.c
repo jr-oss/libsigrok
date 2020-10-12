@@ -463,8 +463,16 @@ SR_PRIV int rigol_ds_capture_start(const struct sr_dev_inst *sdi)
 
 			if (devc->data_source == DATA_SOURCE_LIVE ||
 					devc->data_source == DATA_SOURCE_MEMORY) {
-				if (rigol_ds_config_set(sdi, ":SING") != SR_OK)
-					return SR_ERR;
+				if (!first_frame || devc->channel_config_changed_analog) {
+					if (rigol_ds_config_set(sdi, ":SING") != SR_OK)
+						return SR_ERR;
+				} else {
+					// If initial trigger state is stopped, read data first, before re-arming
+					if (sr_scpi_get_string(sdi->conn, ":TRIG:STAT?", &buf) != SR_OK)
+						return SR_ERR;
+					if ((buf[0] != 'S') && rigol_ds_config_set(sdi, ":SING") != SR_OK)
+						return SR_ERR;
+				}
 			}
 			rigol_ds_set_wait_event(devc, WAIT_STOP);
 

@@ -171,6 +171,8 @@ struct dev_context {
 	float *data;
 	unsigned char *data_logic;
 	int last_enabled_digital_channel;
+	gboolean channel_config_changed_analog;
+	gboolean channel_config_changed_logic;
 };
 
 SR_PRIV int rigol_ds_config_set(const struct sr_dev_inst *sdi, const char *format, ...);
