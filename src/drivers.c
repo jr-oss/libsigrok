@@ -31,8 +31,8 @@
  * start and end of the section. They are used to iterate over the list of
  * all drivers.
  */
-SR_PRIV extern const struct sr_dev_driver *sr_driver_list__start[];
-SR_PRIV extern const struct sr_dev_driver *sr_driver_list__stop[];
+SR_PRIV extern const struct sr_dev_driver *__start___sr_driver_list;
+SR_PRIV extern const struct sr_dev_driver *__stop___sr_driver_list;
 
 /**
  * Initialize the driver list in a fresh libsigrok context.
@@ -47,8 +47,9 @@ SR_API void sr_drivers_init(struct sr_context *ctx)
 
 	array = g_array_new(TRUE, FALSE, sizeof(struct sr_dev_driver *));
 #ifdef HAVE_DRIVERS
-	for (const struct sr_dev_driver **drivers = sr_driver_list__start + 1;
-	     drivers < sr_driver_list__stop; drivers++)
+	for (const struct sr_dev_driver **drivers = &__start___sr_driver_list;
+			drivers < &__stop___sr_driver_list;
+			drivers++)
 		g_array_append_val(array, *drivers);
 #endif
 	ctx->driver_list = (struct sr_dev_driver **)array->data;
