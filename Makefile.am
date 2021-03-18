@@ -116,7 +116,8 @@ libsigrok_la_SOURCES += \
 	src/output/srzip.c \
 	src/output/vcd.c \
 	src/output/wavedrom.c \
-	src/output/null.c
+	src/output/null.c \
+	src/output/srdir.c
 
 # Transform modules
 libsigrok_la_SOURCES += \

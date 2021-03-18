@@ -66,6 +66,7 @@ extern SR_PRIV struct sr_output_module output_srzip;
 extern SR_PRIV struct sr_output_module output_wav;
 extern SR_PRIV struct sr_output_module output_wavedrom;
 extern SR_PRIV struct sr_output_module output_null;
+extern SR_PRIV struct sr_output_module output_srdir;
 /** @endcond */
 
 static const struct sr_output_module *output_module_list[] = {
@@ -82,6 +83,7 @@ static const struct sr_output_module *output_module_list[] = {
 	&output_wav,
 	&output_wavedrom,
 	&output_null,
+	&output_srdir,
 	NULL,
 };
 
