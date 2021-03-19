@@ -26,7 +26,7 @@
 
 #define LOG_PREFIX "scpi_usbtmc"
 
-#define MAX_TRANSFER_LENGTH 2048
+#define MAX_TRANSFER_LENGTH 1025000
 #define TRANSFER_TIMEOUT 1000
 
 struct scpi_usbtmc_libusb {
