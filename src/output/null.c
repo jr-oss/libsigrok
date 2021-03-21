@@ -40,7 +40,7 @@ SR_PRIV struct sr_output_module output_null = {
 	.name = "Null output",
 	.desc = "Null output (discards all data)",
 	.exts = NULL,
-	.flags = 0,
+	.flags = SR_OUTPUT_INTERNAL_IO_HANDLING,
 	.options = NULL,
 	.receive = receive,
 };
