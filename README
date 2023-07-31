@@ -1,4 +1,17 @@
 -------------------------------------------------------------------------------
+NOTE: This branch is used to play around with libsigrok and might change
+      or disappear at any time (force push)
+-------------------------------------------------------------------------------
+It currently contains in addition to mainline libsigrok
+- Support for Rigol MSO-5000 scope and signal generator
+- An output module to write uncompressed data to hard disk for later compression
+- Minor fix for output module 'null'
+
+
+
+
+
+-------------------------------------------------------------------------------
 README
 -------------------------------------------------------------------------------
 
